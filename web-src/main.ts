@@ -63,46 +63,44 @@ function shapeOf(i: number): LineShape {
   return s;
 }
 
-/**
- * 高亮色在缩略图里怎么画：灰色（普通文字、注释、标点）淡一些，让有颜色的部分突出；
- * 浅色主题的语法色偏深（深蓝、深紫挨在一起发闷），缩成色块后又重又扎眼：调成浅一些的粉彩色、紫色压成淡灰紫，
- * 和深色主题下的观感接近。
- */
-const paintCache = new Map<string, { style: string; alpha: number }>();
-function paintOf(color: string): { style: string; alpha: number } {
-  const dark = !!openidea.theme?.dark;
-  const key = `${dark ? "d" : "l"}${color}`;
-  let p = paintCache.get(key);
-  if (p) return p;
-  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color);
-  if (!m) p = { style: color, alpha: 0.9 };
-  else {
-    const [h, s, l] = hsl(+m[1]!, +m[2]!, +m[3]!);
-    if (s < 0.12) p = { style: color, alpha: dark ? 0.45 : 0.3 };
-    else if (dark) p = { style: color, alpha: 0.9 };
-    else {
-      // 紫色系（属性、字段）在亮色方案里和蓝色关键字挤在一起，压成接近灰的淡紫，突出关键字和字符串
-      const purple = h >= 260 && h <= 330;
-      const sat = purple ? 0.18 : Math.min(s, 0.5);
-      p = { style: `hsl(${h} ${sat * 100}% ${Math.min(0.72, Math.max(l, 0.62)) * 100}%)`, alpha: 0.95 };
-    }
+/** 灰色（普通文字、注释、标点）：画淡一些，让有颜色的部分突出。 */
+const greyCache = new Map<string, boolean>();
+function isGrey(color: string): boolean {
+  let grey = greyCache.get(color);
+  if (grey === undefined) {
+    const c = rgbOf(color);
+    grey = !!c && Math.max(...c) - Math.min(...c) < 24;
+    greyCache.set(color, grey);
   }
-  paintCache.set(key, p);
-  return p;
+  return grey;
 }
 
-function hsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  if (!d) return [0, 0, l];
-  const s = d / (1 - Math.abs(2 * l - 1));
-  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return [(h * 60 + 360) % 360, s, l];
+/** 任意 CSS 颜色 → [r, g, b]：交给 canvas 规范化成 #rrggbb 或 rgba()。 */
+function rgbOf(color: string): [number, number, number] | null {
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = color;
+  const s = String(ctx.fillStyle);
+  if (s.startsWith("#")) return [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) as [number, number, number];
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s);
+  return m ? [+m[1]!, +m[2]!, +m[3]!] : null;
+}
+
+/**
+ * 浅色主题照 WebStorm 的缩略图：语法色和背景混成一半深浅的浅色（深蓝→浅蓝、深绿→浅绿），灰色更浅。
+ * 预先混好、不透明地画，盖住下面那层灰，颜色才干净。
+ */
+const mixCache = new Map<string, string>();
+function lightColor(color: string, bg: string): string {
+  const key = `${color}|${bg}`;
+  let out = mixCache.get(key);
+  if (out === undefined) {
+    const c = rgbOf(color);
+    const b = rgbOf(bg) ?? [255, 255, 255];
+    const t = isGrey(color) ? 0.25 : 0.5; // 原色占的比例
+    out = c ? `rgb(${c.map((v, i) => Math.round(v * t + b[i]! * (1 - t))).join(",")})` : color;
+    mixCache.set(key, out);
+  }
+  return out;
 }
 
 const themeVar = (name: string, fallback: string) => openidea.theme?.vars[name] || fallback;
@@ -172,13 +170,20 @@ function draw() {
       }
     }
   }
+  const dark = !!openidea.theme?.dark;
+  const bg = themeVar("--openidea-bg", "#fff");
   ctx.fillStyle = fg;
-  ctx.globalAlpha = openidea.theme?.dark ? 0.3 : 0.2;
+  ctx.globalAlpha = dark ? 0.3 : 0.18;
   ctx.fill(base);
   for (const [color, path] of groups) {
-    const paint = paintOf(color);
-    ctx.fillStyle = paint.style;
-    ctx.globalAlpha = paint.alpha;
+    if (dark) {
+      // 深色主题：原色略透一点，灰色更淡
+      ctx.fillStyle = color;
+      ctx.globalAlpha = isGrey(color) ? 0.45 : 0.9;
+    } else {
+      ctx.fillStyle = lightColor(color, bg);
+      ctx.globalAlpha = 1;
+    }
     ctx.fill(path);
   }
 
