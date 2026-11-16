@@ -1,5 +1,11 @@
 # OpenIDEA Minimap
 
+A code minimap for [OpenIDEA](https://github.com/l0ng-ai/openidea): the whole file in its syntax colours at the
+right edge of every editor, the visible area as a frame you can drag; click to jump, the wheel scrolls the editor.
+It is a web page only (no WASM code) on the `[[contributes.editorPanels]]` extension point, and needs OpenIDEA with
+plugin API 1.9. It asks for one capability, `editor.read` (low risk): the page reads the text and syntax colours of
+the files the editors show, to draw them. It has no network or process access.
+
 OpenIDEA 的代码缩略图插件：编辑器右侧按语法高亮画出整个文件（每行 4px、每个字符 2px 的色块），
 当前可见区画成一个框。
 
@@ -9,9 +15,15 @@ OpenIDEA 的代码缩略图插件：编辑器右侧按语法高亮画出整个�
 - 跟随主题：深色主题直接用语法色；浅色主题照 WebStorm 的缩略图，语法色和背景混成一半深浅的浅色
 - 分屏时每一侧各一个面板，切换标签页不重新加载页面
 
-只有页面、没有 WASM 代码，用的是 API 1.9 的 `[[contributes.editorPanels]]` 扩展点
-（[l0ng-ai/openidea#3677](https://github.com/l0ng-ai/openidea/pull/3677)，未发布前只能在该 PR 分支的 IDE 里运行）。
-需要 `editor.read` 权限：页面能读到编辑器显示的每个文件。
+只有页面、没有 WASM 代码，用的是插件 API 1.9 的 `[[contributes.editorPanels]]` 扩展点
+（[l0ng-ai/openidea#3677](https://github.com/l0ng-ai/openidea/pull/3677)），需要带 API 1.9 的 OpenIDEA。
+需要 `editor.read` 权限（低风险）：页面要读编辑器显示的文件的文本和语法颜色才能画出来；没有网络和进程权限。
+
+## 安装
+
+Settings › Plugins › Available 里搜索 Minimap 安装；或从
+[Releases](https://github.com/wildcatDownstairs/openidea-minimap/releases) 下载 `.oiplugin`，
+用 _Install Plugin from Package File…_ 安装。
 
 ## 目录
 
@@ -22,7 +34,7 @@ web-src/           页面源码（TypeScript + Vite）
   layout.ts        缩略图几何（视口框位置、拖动换算）
   layout.test.ts   layout 的测试
   openidea.ts      window.openidea 里用到的类型
-web/               构建产物，插件包实际带的就是它（不提交，见下）
+web/               构建产物，插件包实际带的就是它（不提交，打包前 yarn build）
 ```
 
 ## 构建
@@ -50,21 +62,35 @@ yarn watch    # 改了就重新构建，配合 IDE 里的 Reload 使用
 ## 在 IDE 里调试
 
 1. `yarn build`
-2. 用 PR 分支的 `openidea-plugin` 检查并链接（在 OpenIDEA 仓库的 PR 分支下运行）：
+2. 用支持 API 1.9 的 `openidea-plugin` 检查并链接（随 OpenIDEA 发布，或在 OpenIDEA 仓库里
+   `cargo run -p ide-host --bin openidea-plugin --`）：
 
    ```bash
-   cargo run -p ide-host --bin openidea-plugin -- check /path/to/openidea-minimap
+   openidea-plugin check .
    ```
 
    ```bash
-   cargo run -p ide-host --bin openidea-plugin -- link /path/to/openidea-minimap
+   openidea-plugin link .
    ```
 
    `link` 默认写进正式版 IDE 的插件目录；只想链接到 `pnpm dev:app` 启动的开发版时，
    设 `OPENIDEA_PLUGINS_DIR=<开发版的数据目录>/plugins`。
 3. Settings › Plugins 里允许 `editor.read`，打开任意文本文件即可看到。
 4. 改代码后 `yarn build`，再在 Settings › Plugins 里 _Reload_。注意：已经打开的面板不会重新加载页面，
-   需要关掉再打开项目窗口（或重启 IDE）。
+   要让面板重新挂载（例如重新打开项目窗口）才能看到新页面。
+
+## 发布
+
+```bash
+yarn build
+```
+
+```bash
+openidea-plugin pack . --key <发布者私钥> --publisher wildcatdownstairs
+```
+
+把生成的 `wildcatdownstairs.minimap-<版本>.oiplugin` 附到 GitHub Release，
+再向 [openidea-plugins](https://github.com/l0ng-ai/openidea-plugins) 提 PR 更新 `[[versions]]`。
 
 ## 实现要点
 
