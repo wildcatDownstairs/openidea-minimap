@@ -6,6 +6,12 @@ It is a web page only (no WASM code) on the `[[contributes.editorPanels]]` exten
 plugin API 1.9. It asks for one capability, `editor.read` (low risk): the page reads the text and syntax colours of
 the files the editors show, to draw them. It has no network or process access.
 
+![Minimap in a split editor, light theme](https://raw.githubusercontent.com/wildcatDownstairs/openidea-minimap/main/docs/screenshot-light.png)
+
+![Minimap in a split editor, dark theme](https://raw.githubusercontent.com/wildcatDownstairs/openidea-minimap/main/docs/screenshot-dark.png)
+
+<img alt="The minimap up close: light, dark, and while dragging the visible-area frame" src="https://raw.githubusercontent.com/wildcatDownstairs/openidea-minimap/main/docs/minimap-closeup.png" width="420">
+
 OpenIDEA 的代码缩略图插件：编辑器右侧按语法高亮画出整个文件（每行 4px、每个字符 2px 的色块），
 当前可见区画成一个框。
 
@@ -35,6 +41,7 @@ web-src/           页面源码（TypeScript + Vite）
   layout.test.ts   layout 的测试
   openidea.ts      window.openidea 里用到的类型
 web/               构建产物，插件包实际带的就是它（不提交，打包前 yarn build）
+docs/              README 里的截图（不进插件包）
 ```
 
 ## 构建
