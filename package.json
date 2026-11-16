@@ -1,0 +1,16 @@
+{
+  "name": "openidea-minimap",
+  "private": true,
+  "type": "module",
+  "packageManager": "yarn@4.3.1",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "watch": "vite build --watch",
+    "lint": "tsc --noEmit",
+    "test": "node --test web-src/layout.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  }
+}

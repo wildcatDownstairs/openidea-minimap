@@ -1,0 +1,5 @@
+node_modules/
+# 构建产物：打包前用 `yarn build` 生成
+web/
+.yarn/
+*.oip

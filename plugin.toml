@@ -1,0 +1,15 @@
+id = "wildcat.minimap"
+name = "Minimap"
+version = "0.1.0"
+description = "A code minimap beside the editor: syntax colours, the visible area as a draggable frame, click to jump."
+authors = ["wildcatDownstairs"]
+categories = ["tools"]
+engines.openidea = "^1.9"
+
+[capabilities]
+required = ["editor.read"]
+
+[[contributes.editorPanels]]
+id = "minimap"
+web = "web/index.html"
+width = 110
