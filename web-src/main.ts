@@ -3,7 +3,16 @@
  * 只画面板里看得见的那几百行，所以上万行的文件每帧也只画这么多。
  */
 import { CHAR_W, LINE_H, countsFromFolds, layout, lineForClick, lineForFrameTop, rows, type MapLayout, type Rows } from "./layout.ts";
-import { openidea, type EditorTarget, type EditorViewport, type Fold, type HighlightSpan, type Problem } from "./openidea.ts";
+import {
+  openidea,
+  type Change,
+  type EditorTarget,
+  type EditorViewport,
+  type Fold,
+  type HighlightSpan,
+  type Problem,
+  type Selection,
+} from "./openidea.ts";
 import { sectionHeader, type SectionHeader } from "./sections.ts";
 
 const editor = openidea.editor!;
@@ -14,13 +23,15 @@ const ctx = canvas.getContext("2d")!;
 const BLOCK = 1000;
 /** 一次向宿主要多少行的换行信息（宿主上限 2000）。 */
 const WRAP_BLOCK = 2000;
+/** 改动标记的颜色（API 1.10 的主题变量，和编辑器侧栏一致）。 */
+const CHANGE_FALLBACK: Record<string, string> = { added: "#5fb865", modified: "#548af7", deleted: "#868a91" };
 /** 问题标记的颜色和画的先后：错误最后画，压在上面。 */
 const PROBLEM_COLOR: Record<string, string> = { error: "--openidea-danger", warning: "--openidea-warning" };
 const PROBLEM_RANK: Record<string, number> = { error: 2, warning: 1 };
 /** 每行最多看多少个字符：面板最宽 400px。 */
 const SCAN = Math.ceil(400 / CHAR_W);
-// ponytail: 编辑器的 tab 宽度接口里拿不到，先按 4
-const TAB = 4;
+/** 一个 tab 占几列：API 1.10 起用编辑器的值（`get().tabSize`），之前固定按 4。 */
+let tab = 4;
 
 /** 一行里非空白的片段，`runs` 为视觉列 [起, 止, 起, 止…]；有 tab 时 `xs` 把 UTF-16 列换成视觉列。`header`：分区标题。 */
 interface LineShape {
@@ -42,6 +53,8 @@ let inflight = new Set<number>();
 // API 1.10，旧版 IDE 上一直是空的
 let problems: Problem[] = [];
 let folds: Fold[] = [];
+let selections: Selection[] = [];
+let changes: Change[] = [];
 /** 开了自动换行时每行的视觉行数，否则 null。 */
 let wrapCounts: number[] | null = null;
 /** 编辑器行 ↔ 缩略图行。 */
@@ -64,7 +77,7 @@ function shapeOf(i: number): LineShape {
     let x = 0;
     for (let c = 0; c < text.length; c++) {
       xs[c] = x;
-      x = text[c] === "\t" ? (Math.floor(x / TAB) + 1) * TAB : x + 1;
+      x = text[c] === "\t" ? (Math.floor(x / tab) + 1) * tab : x + 1;
     }
     xs[text.length] = x;
   }
@@ -175,9 +188,25 @@ function draw() {
   const firstRow = Math.max(0, Math.floor(offset / lineH));
   const first = Math.floor(rowMap.lineAt(firstRow));
   const last = Math.min(lines.length, Math.floor(rowMap.lineAt(Math.ceil((offset + h) / lineH))) + 1);
-  const maxX = Math.ceil(w / charW);
+  // 宿主能给改动标记（API 1.10）时，左边留一条窄栏画改动，代码往右挪一点
+  const gx = editor.changes ? Math.round(3 * dpr) : 0;
+  const maxX = Math.ceil((w - gx) / charW);
   /** 第 i 行在面板里的 y（设备像素）。 */
   const yOf = (i: number) => Math.round(rowMap.rowOf(i)) * lineH - offset;
+  const px = Math.max(1, Math.round(dpr));
+
+  // 选区和光标所在行（API 1.10）：先画底色，代码叠在上面
+  for (const sel of selections) {
+    const a = Math.min(sel.anchor.line, sel.head.line);
+    const b = Math.max(sel.anchor.line, sel.head.line);
+    const top = yOf(a);
+    const bottom = yOf(b + 1);
+    if (bottom <= top || bottom < 0 || top > h) continue; // 整段都被折叠，或不在面板里
+    const caret = sel.anchor.line === sel.head.line && sel.anchor.column === sel.head.column;
+    ctx.fillStyle = caret ? themeVar("--openidea-fg", "#888") : themeVar("--openidea-bg-selected", "#2e436e");
+    ctx.globalAlpha = caret ? 0.1 : 0.9;
+    ctx.fillRect(0, top, w, bottom - top);
+  }
 
   // 先把所有字画成淡色，再按颜色分组叠上高亮：每种颜色只 fill 一次
   const fg = themeVar("--openidea-fg", "#888");
@@ -215,6 +244,7 @@ function draw() {
   }
   const dark = !!openidea.theme?.dark;
   const bg = themeVar("--openidea-bg", "#fff");
+  ctx.setTransform(1, 0, 0, 1, gx, 0);
   ctx.fillStyle = fg;
   ctx.globalAlpha = dark ? 0.3 : 0.18;
   ctx.fill(base);
@@ -229,9 +259,9 @@ function draw() {
     }
     ctx.fill(path);
   }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   // 分区标题：先用背景色盖住标题占的那几行，再写字；`MARK: -` 在上方加一条线
-  const px = Math.max(1, Math.round(dpr));
   const fontPx = Math.round(9 * dpr);
   const boxH = fontPx + 2 * px;
   ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
@@ -253,7 +283,7 @@ function draw() {
     }
     if (hd.label) {
       ctx.globalAlpha = 0.9;
-      ctx.fillText(hd.label, 2 * px, y + px);
+      ctx.fillText(hd.label, gx + 2 * px, y + px);
     }
   }
 
@@ -266,6 +296,21 @@ function draw() {
     ctx.globalAlpha = PROBLEM_COLOR[p.severity] ? 1 : 0.7;
     ctx.fillStyle = themeVar(PROBLEM_COLOR[p.severity] ?? "--openidea-fg-muted", p.severity === "error" ? "#e55765" : "#c9a23a");
     ctx.fillRect(w - barW, top, barW, bottom - top);
+  }
+
+  // 改动标记（API 1.10）：左边窄栏，颜色同编辑器侧栏；删除的地方画一道短横线
+  const cw = Math.max(2, gx - px);
+  for (const c of changes) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = themeVar(`--openidea-change-${c.kind}`, CHANGE_FALLBACK[c.kind] ?? "#868a91");
+    const top = yOf(c.line);
+    if (c.kind === "deleted") {
+      if (top >= -px && top <= h) ctx.fillRect(0, top - px, 2 * cw, 2 * px);
+      continue;
+    }
+    const bottom = Math.max(yOf(c.lastLine + 1), top + lineH);
+    if (bottom < 0 || top > h) continue;
+    ctx.fillRect(0, top, cw, bottom - top);
   }
 
   // 可见区：指针在缩略图上或拖动时才画，淡淡的底色加 1px 边框，悬停在框上和拖动时更明显
@@ -371,23 +416,30 @@ async function retarget(t: EditorTarget | null) {
   problems = [];
   folds = [];
   wrapCounts = null;
+  selections = [];
+  changes = [];
   if (!t) {
     setText("");
     redraw();
     return;
   }
   try {
-    const [doc, vp, p, f] = await Promise.all([
+    const [doc, vp, p, f, sel, ch] = await Promise.all([
       editor.document.get(),
       editor.viewport(),
       // 新接口出错不影响画代码
       editor.problems?.().catch(() => []) ?? [],
       editor.folded?.().catch(() => []) ?? [],
+      editor.selections?.().catch(() => []) ?? [],
+      editor.changes?.().catch(() => []) ?? [],
     ]);
     if (gen !== generation) return;
     target = t;
     setProblems(p);
     folds = f;
+    selections = sel;
+    changes = ch;
+    setTab(t.tabSize);
     setText(doc.text);
     view = vp;
     void fetchWrapped();
@@ -399,14 +451,41 @@ async function retarget(t: EditorTarget | null) {
   redraw();
 }
 
-editor.onTarget((t) => void retarget(t));
+/** API 1.10 的 tab 宽度；没给就按 4。变了要重新算每行的形状。 */
+function setTab(size: number | undefined): boolean {
+  const next = size && size > 0 ? size : 4;
+  if (next === tab) return false;
+  tab = next;
+  shapes = [];
+  return true;
+}
+
+editor.onTarget((t) => {
+  // 同一个文件、文本没变，只是 tab 宽度变了（API 1.10 会为此再发一次 onTarget）：重排就行，不用整个重载
+  if (t && target && t.path === target.path && t.version === target.version) {
+    if (setTab(t.tabSize)) redraw();
+    return;
+  }
+  void retarget(t);
+});
 editor.document.onChange((doc) => {
   if (!target) return;
+  target = { ...target, version: doc.version };
   setText(doc.text);
   if (wrapCounts) void fetchWrapped();
   redraw();
 });
-// API 1.10：问题标记、折叠和自动换行
+// API 1.10：问题标记、选区、改动标记、折叠和自动换行
+editor.onSelections?.((sel) => {
+  if (!target) return;
+  selections = sel;
+  redraw();
+});
+editor.onChanges?.((ch) => {
+  if (!target) return;
+  changes = ch;
+  redraw();
+});
 editor.onProblems?.((p) => {
   if (!target) return;
   setProblems(p);

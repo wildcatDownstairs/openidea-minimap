@@ -5,6 +5,8 @@ export interface EditorTarget {
   language: string;
   version: number;
   lineCount: number;
+  /** API 1.10：编辑器里一个 tab 占几列（Code Style、.editorconfig、缩进检测的结果）。 */
+  tabSize?: number;
 }
 
 export interface EditorViewport {
@@ -33,6 +35,19 @@ export interface Problem {
 export interface Fold {
   fromLine: number;
   toLine: number;
+}
+
+/** API 1.10：一个选区；光标是 anchor 和 head 相同的选区。行从 0 起，列是 UTF-16。 */
+export interface Selection {
+  anchor: { line: number; column: number };
+  head: { line: number; column: number };
+}
+
+/** API 1.10：侧栏的一处版本控制改动；删除时 `line` 是被删文本下面那一行。 */
+export interface Change {
+  line: number;
+  lastLine: number;
+  kind: string; // "added" | "modified" | "deleted"
 }
 
 export interface Theme {
@@ -65,6 +80,10 @@ export interface OpenIdeaEditor {
   /** 每行占几个视觉行（一次最多 2000 行）；没开自动换行时为 null。 */
   wrapped?(fromLine: number, toLine: number): Promise<number[] | null>;
   onLayout?(fn: (l: { folded: Fold[]; softWrap: boolean }) => void): void;
+  selections?(): Promise<Selection[]>;
+  onSelections?(fn: (s: Selection[]) => void): void;
+  changes?(): Promise<Change[]>;
+  onChanges?(fn: (c: Change[]) => void): void;
 }
 
 interface OpenIdea {

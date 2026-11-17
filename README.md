@@ -8,9 +8,10 @@ right edge of every editor (4px per line, 2px per character), the visible area a
 - Click the minimap: the editor jumps to the line you clicked, centred
 - Drag the frame: the editor scrolls with it; the wheel goes to the editor
 - The frame shows only while the pointer is over the minimap (like VS Code's default)
-- With OpenIDEA's plugin API 1.10 (the release after 0.1.46): errors and warnings as bars at the right edge, folded
-  code left out, wrapped lines drawn on as many rows as the editor shows, and semantic highlighting colours. Older
-  IDEs keep the rest.
+- With OpenIDEA's plugin API 1.10 (the release after 0.1.46): errors and warnings as bars at the right edge, VCS
+  changes at the left edge in the gutter's colours, the selected lines and the caret's line tinted, folded code left
+  out, wrapped lines drawn on as many rows as the editor shows, tabs as wide as in the editor, and semantic highlighting
+  colours. Older IDEs keep the rest.
 - Section headers: `// MARK: Title`, `// MARK: - Title` (with a separator line) and named `#region Title` comments are
   written out as small labels
 - When the file is longer than the panel, the minimap scrolls along with the editor (like VS Code / CodeGlance)
@@ -117,7 +118,7 @@ Attach the resulting `wildcatdownstairs.minimap-<version>.oiplugin` to a GitHub 
 - For long files the frame is placed by the editor's scroll ratio; while dragging, the target line is estimated
   from the current viewport by the average line height and corrected on each viewport update, so the frame stays
   under the pointer even when code lenses and folding make line heights uneven.
-- Tabs count as 4 columns (the API doesn't expose the editor's tab width); full-width characters count as 1.
+- Tabs are as wide as in the editor (`get().tabSize`, API 1.10), 4 columns in older IDEs; full-width characters count as 1.
 
 ## Contact
 
