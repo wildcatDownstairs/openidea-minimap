@@ -7,6 +7,9 @@ right edge of every editor (4px per line, 2px per character), the visible area a
 
 - Click the minimap: the editor jumps to the line you clicked, centred
 - Drag the frame: the editor scrolls with it; the wheel goes to the editor
+- The frame shows only while the pointer is over the minimap (like VS Code's default)
+- Section headers: `// MARK: Title`, `// MARK: - Title` (with a separator line) and named `#region Title` comments are
+  written out as small labels
 - When the file is longer than the panel, the minimap scrolls along with the editor (like VS Code / CodeGlance)
 - Follows the theme: dark themes use the syntax colours as they are; light themes follow WebStorm's minimap, with
   the syntax colours mixed half-way into the background
@@ -38,6 +41,7 @@ web-src/           page source (TypeScript + Vite)
   main.ts          drawing and interaction
   layout.ts        minimap geometry (frame position, drag conversion)
   layout.test.ts   tests for layout
+  sections.ts      section headers (MARK / region)
   openidea.ts      types used from window.openidea
 web/               build output, what the package ships (not committed; run yarn build before packing)
 docs/              README screenshots (not in the package)
@@ -56,7 +60,7 @@ yarn build    # type check + output to web/
 ```
 
 ```bash
-yarn test     # tests for layout
+yarn test     # tests
 ```
 
 ```bash

@@ -4,6 +4,7 @@
  */
 import { CHAR_W, LINE_H, layout, lineForClick, lineForFrameTop, type MapLayout } from "./layout.ts";
 import { openidea, type EditorTarget, type EditorViewport, type HighlightSpan } from "./openidea.ts";
+import { sectionHeader, type SectionHeader } from "./sections.ts";
 
 const editor = openidea.editor!;
 const canvas = document.getElementById("map") as HTMLCanvasElement;
@@ -16,10 +17,11 @@ const SCAN = Math.ceil(400 / CHAR_W);
 // ponytail: 编辑器的 tab 宽度接口里拿不到，先按 4
 const TAB = 4;
 
-/** 一行里非空白的片段，`runs` 为视觉列 [起, 止, 起, 止…]；有 tab 时 `xs` 把 UTF-16 列换成视觉列。 */
+/** 一行里非空白的片段，`runs` 为视觉列 [起, 止, 起, 止…]；有 tab 时 `xs` 把 UTF-16 列换成视觉列。`header`：分区标题。 */
 interface LineShape {
   runs: number[];
   xs: Uint16Array | null;
+  header: SectionHeader | null;
 }
 
 let generation = 0;
@@ -36,6 +38,8 @@ let inflight = new Set<number>();
 /** 拖动中：指针按在框里的位置、指针当前位置、上次请求滚到的行。 */
 let drag: { grab: number; y: number; sent: number } | null = null;
 let hover = false;
+/** 指针在缩略图上：这时才画视口框（同 VS Code 的 showSlider: mouseover）。 */
+let inside = false;
 let queued = false;
 
 function shapeOf(i: number): LineShape {
@@ -58,7 +62,7 @@ function shapeOf(i: number): LineShape {
     const b = a + m[0].length;
     runs.push(xs ? xs[a]! : a, xs ? xs[b]! : b);
   }
-  s = { runs, xs };
+  s = { runs, xs, header: sectionHeader(lines[i] ?? "") };
   shapes[i] = s;
   return s;
 }
@@ -187,23 +191,52 @@ function draw() {
     ctx.fill(path);
   }
 
-  // 可见区：淡淡的底色加 1px 边框，悬停和拖动时更明显
-  const top = Math.round(m.frameTop * dpr);
-  const frameH = Math.max(Math.round(m.frameH * dpr), 2 * lineH);
-  ctx.fillStyle = fg;
-  ctx.globalAlpha = drag ? 0.16 : hover ? 0.11 : 0.07;
-  ctx.fillRect(0, top, w, frameH);
+  // 分区标题：先用背景色盖住标题占的那几行，再写字；`MARK: -` 在上方加一条线
   const px = Math.max(1, Math.round(dpr));
-  ctx.globalAlpha = drag ? 0.55 : hover ? 0.35 : 0.22;
-  ctx.fillRect(0, top, w, px);
-  ctx.fillRect(0, top + frameH - px, w, px);
-  ctx.fillRect(0, top, px, frameH);
-  ctx.fillRect(w - px, top, px, frameH);
+  const fontPx = Math.round(9 * dpr);
+  const boxH = fontPx + 2 * px;
+  ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+  ctx.textBaseline = "top";
+  // 标题比一行高，上面几行的标题也会伸进来
+  for (let i = Math.max(0, first - Math.ceil(boxH / lineH)); i < last; i++) {
+    const hd = shapeOf(i).header;
+    if (!hd) continue;
+    const y = i * lineH - offset;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, y, w, boxH);
+    ctx.fillStyle = fg;
+    if (hd.separator) {
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(0, y, w, px);
+    }
+    if (hd.label) {
+      ctx.globalAlpha = 0.9;
+      ctx.fillText(hd.label, 2 * px, y + px);
+    }
+  }
+
+  // 可见区：指针在缩略图上或拖动时才画，淡淡的底色加 1px 边框，悬停在框上和拖动时更明显
+  if (inside || drag) drawFrame(m, dpr, w, fg, px);
   ctx.globalAlpha = 1;
 
   // 看得见的行再往两头各多取一些，滚动时不闪
   const margin = Math.ceil(h / lineH);
   ensureHighlights(Math.max(0, first - margin), Math.min(lines.length, last + margin));
+}
+
+function drawFrame(m: MapLayout, dpr: number, w: number, fg: string, px: number) {
+  const lineH = Math.round(LINE_H * dpr);
+  const top = Math.round(m.frameTop * dpr);
+  const frameH = Math.max(Math.round(m.frameH * dpr), 2 * lineH);
+  ctx.fillStyle = fg;
+  ctx.globalAlpha = drag ? 0.16 : hover ? 0.11 : 0.07;
+  ctx.fillRect(0, top, w, frameH);
+  ctx.globalAlpha = drag ? 0.55 : hover ? 0.35 : 0.22;
+  ctx.fillRect(0, top, w, px);
+  ctx.fillRect(0, top + frameH - px, w, px);
+  ctx.fillRect(0, top, px, frameH);
+  ctx.fillRect(w - px, top, px, frameH);
 }
 
 function ensureHighlights(from: number, to: number) {
@@ -339,11 +372,14 @@ const endDrag = () => {
 };
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
+canvas.addEventListener("pointerenter", () => {
+  inside = true;
+  redraw();
+});
 canvas.addEventListener("pointerleave", () => {
-  if (hover) {
-    hover = false;
-    redraw();
-  }
+  inside = false;
+  hover = false;
+  redraw();
 });
 canvas.addEventListener(
   "wheel",

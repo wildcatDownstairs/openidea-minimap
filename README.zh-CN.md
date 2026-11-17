@@ -7,6 +7,8 @@
 
 - 点击缩略图：编辑器跳到点中的那一行，并把它放在中间
 - 拖动框：编辑器跟着滚动；滚轮交给编辑器
+- 视口框只在鼠标移到缩略图上时显示（和 VS Code 默认一样）
+- 分区标题：`// MARK: 标题`、`// MARK: - 标题`（上方加分隔线）和带名字的 `#region 标题` 注释会写成小字标签
 - 文件比面板长时缩略图跟着编辑器一起滚动（和 VS Code / CodeGlance 一样）
 - 跟随主题：深色主题直接用语法色；浅色主题照 WebStorm 的缩略图，语法色和背景混成一半深浅的浅色
 - 分屏时每一侧各一个面板，切换标签页不重新加载页面
@@ -36,6 +38,7 @@ web-src/           页面源码（TypeScript + Vite）
   main.ts          绘制和交互
   layout.ts        缩略图几何（视口框位置、拖动换算）
   layout.test.ts   layout 的测试
+  sections.ts      分区标题（MARK / region）
   openidea.ts      window.openidea 里用到的类型
 web/               构建产物，插件包实际带的就是它（不提交，打包前 yarn build）
 docs/              README 里的截图（不进插件包）
@@ -54,7 +57,7 @@ yarn build    # 类型检查 + 输出到 web/
 ```
 
 ```bash
-yarn test     # layout 的测试
+yarn test     # 测试
 ```
 
 ```bash
