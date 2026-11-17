@@ -1,10 +1,21 @@
 # OpenIDEA Minimap
 
+English · [简体中文](https://github.com/wildcatDownstairs/openidea-minimap/blob/main/README.zh-CN.md)
+
 A code minimap for [OpenIDEA](https://github.com/l0ng-ai/openidea): the whole file in its syntax colours at the
-right edge of every editor, the visible area as a frame you can drag; click to jump, the wheel scrolls the editor.
-It is a web page only (no WASM code) on the `[[contributes.editorPanels]]` extension point, and needs OpenIDEA with
-plugin API 1.9. It asks for one capability, `editor.read` (low risk): the page reads the text and syntax colours of
-the files the editors show, to draw them. It has no network or process access.
+right edge of every editor (4px per line, 2px per character), the visible area as a frame you can drag.
+
+- Click the minimap: the visible area jumps there (the frame centres on the click)
+- Drag the frame: the editor scrolls with it; the wheel goes to the editor
+- When the file is longer than the panel, the minimap scrolls along with the editor (like VS Code / CodeGlance)
+- Follows the theme: dark themes use the syntax colours as they are; light themes follow WebStorm's minimap, with
+  the syntax colours mixed half-way into the background
+- In a split editor each side has its own panel; switching tabs doesn't reload the page
+
+It is a web page only (no WASM code) on the `[[contributes.editorPanels]]` extension point of plugin API 1.9
+([l0ng-ai/openidea#3677](https://github.com/l0ng-ai/openidea/pull/3677)), so it needs an OpenIDEA with plugin
+API 1.9 (0.1.46 or later). It asks for one capability, `editor.read` (low risk): the page reads the text and
+syntax colours of the files the editors show, to draw them. It has no network or process access.
 
 ![Minimap in a split editor, light theme](https://raw.githubusercontent.com/wildcatDownstairs/openidea-minimap/main/docs/screenshot-light.png)
 
@@ -12,65 +23,53 @@ the files the editors show, to draw them. It has no network or process access.
 
 <img alt="The minimap up close: light, dark, and while dragging the visible-area frame" src="https://raw.githubusercontent.com/wildcatDownstairs/openidea-minimap/main/docs/minimap-closeup.png" width="420">
 
-OpenIDEA 的代码缩略图插件：编辑器右侧按语法高亮画出整个文件（每行 4px、每个字符 2px 的色块），
-当前可见区画成一个框。
+## Install
 
-- 点击缩略图：可见区跳到那里（框居中到点击处）
-- 拖动框：编辑器跟着滚动；滚轮交给编辑器
-- 文件比面板长时缩略图跟着编辑器一起滚动（和 VS Code / CodeGlance 一样）
-- 跟随主题：深色主题直接用语法色；浅色主题照 WebStorm 的缩略图，语法色和背景混成一半深浅的浅色
-- 分屏时每一侧各一个面板，切换标签页不重新加载页面
+Search for Minimap in Settings › Plugins › Available; or download the `.oiplugin` from
+[Releases](https://github.com/wildcatDownstairs/openidea-minimap/releases) and install it with
+_Install Plugin from Package File…_.
 
-只有页面、没有 WASM 代码，用的是插件 API 1.9 的 `[[contributes.editorPanels]]` 扩展点
-（[l0ng-ai/openidea#3677](https://github.com/l0ng-ai/openidea/pull/3677)），需要带 API 1.9 的 OpenIDEA。
-需要 `editor.read` 权限（低风险）：页面要读编辑器显示的文件的文本和语法颜色才能画出来；没有网络和进程权限。
-
-## 安装
-
-Settings › Plugins › Available 里搜索 Minimap 安装；或从
-[Releases](https://github.com/wildcatDownstairs/openidea-minimap/releases) 下载 `.oiplugin`，
-用 _Install Plugin from Package File…_ 安装。
-
-## 目录
+## Layout
 
 ```
-plugin.toml        清单
-web-src/           页面源码（TypeScript + Vite）
-  main.ts          绘制和交互
-  layout.ts        缩略图几何（视口框位置、拖动换算）
-  layout.test.ts   layout 的测试
-  openidea.ts      window.openidea 里用到的类型
-web/               构建产物，插件包实际带的就是它（不提交，打包前 yarn build）
-docs/              README 里的截图（不进插件包）
+plugin.toml        manifest
+icons/             plugin icon (light and dark)
+web-src/           page source (TypeScript + Vite)
+  main.ts          drawing and interaction
+  layout.ts        minimap geometry (frame position, drag conversion)
+  layout.test.ts   tests for layout
+  openidea.ts      types used from window.openidea
+web/               build output, what the package ships (not committed; run yarn build before packing)
+docs/              README screenshots (not in the package)
 ```
 
-## 构建
+## Build
 
-需要 Node 24（测试直接跑 TS）和 Yarn 4。
+Needs Node 24 (the tests run TypeScript directly) and Yarn 4.
 
 ```bash
 yarn install
 ```
 
 ```bash
-yarn build    # 类型检查 + 输出到 web/
+yarn build    # type check + output to web/
 ```
 
 ```bash
-yarn test     # layout 的测试
+yarn test     # tests for layout
 ```
 
 ```bash
-yarn watch    # 改了就重新构建，配合 IDE 里的 Reload 使用
+yarn watch    # rebuild on change, use with Reload in the IDE
 ```
 
-`web/` 是构建产物，不提交到仓库：打包（`openidea-plugin pack`）前先 `yarn build`。
+`web/` is build output and not committed: run `yarn build` before packing (`openidea-plugin pack`).
 
-## 在 IDE 里调试
+## Debugging in the IDE
 
 1. `yarn build`
-2. 用支持 API 1.9 的 `openidea-plugin` 检查并链接（随 OpenIDEA 发布，或在 OpenIDEA 仓库里
-   `cargo run -p ide-host --bin openidea-plugin --`）：
+2. Check and link it with an `openidea-plugin` that supports API 1.9 (shipped with OpenIDEA releases, or
+   `cargo run -p ide-host --bin openidea-plugin --` in the OpenIDEA repository):
 
    ```bash
    openidea-plugin check .
@@ -80,31 +79,43 @@ yarn watch    # 改了就重新构建，配合 IDE 里的 Reload 使用
    openidea-plugin link .
    ```
 
-   `link` 默认写进正式版 IDE 的插件目录；只想链接到 `pnpm dev:app` 启动的开发版时，
-   设 `OPENIDEA_PLUGINS_DIR=<开发版的数据目录>/plugins`。
-3. Settings › Plugins 里允许 `editor.read`，打开任意文本文件即可看到。
-4. 改代码后 `yarn build`，再在 Settings › Plugins 里 _Reload_。注意：已经打开的面板不会重新加载页面，
-   要让面板重新挂载（例如重新打开项目窗口）才能看到新页面。
+   `link` writes to the plugin directory of the released IDE by default; to link to the development build
+   started by `pnpm dev:app` only, set `OPENIDEA_PLUGINS_DIR=<dev data directory>/plugins`.
+3. Allow `editor.read` in Settings › Plugins and open any text file.
+4. After changing the code, `yarn build`, then _Reload_ in Settings › Plugins. Panels that are already open don't
+   reload their page: remount the panel (for example reopen the project window) to see the new page.
 
-## 发布
+## Release
 
 ```bash
 yarn build
 ```
 
 ```bash
-openidea-plugin pack . --key <发布者私钥> --publisher wildcatdownstairs
+openidea-plugin pack . --key <publisher private key> --publisher wildcatdownstairs
 ```
 
-把生成的 `wildcatdownstairs.minimap-<版本>.oiplugin` 附到 GitHub Release，
-再向 [openidea-plugins](https://github.com/l0ng-ai/openidea-plugins) 提 PR 更新 `[[versions]]`。
+Attach the resulting `wildcatdownstairs.minimap-<version>.oiplugin` to a GitHub Release, then open a PR to
+[openidea-plugins](https://github.com/l0ng-ai/openidea-plugins) that updates `[[versions]]`.
 
-## 实现要点
+## Implementation notes
 
-- 只画面板里看得见的那几百行；每次重绘约 0.15ms（1 万行文件、滚动时实测，最长 1ms）。
-- 不用 `requestAnimationFrame` 重绘：WebKit 会给沙箱 iframe 的 rAF 限流，实测只跟上约 4 成的滚动帧。
-  宿主每帧最多发一次 `onViewport`，收到就画（同一任务里的多次请求用 microtask 合并）。
-- 高亮按 1000 行一块懒加载，只取可见区附近的块；`onHighlights` 只把块标成过期，旧颜色先留着，新颜色到了再换。
-- 长文件的视口框按编辑器的滚动比例定位；拖动时从当前视口按平均行高推算目标行，每次视口更新再校正，
-  代码透镜、折叠造成的行高不一也能让框停在指针下。
-- tab 按 4 列算（接口里拿不到编辑器的 tab 宽度）；全角字符按 1 列算。
+- Only the few hundred lines visible in the panel are drawn; a redraw takes about 0.15ms (measured while
+  scrolling a 10,000-line file, 1ms at most).
+- No `requestAnimationFrame` for redraws: WebKit throttles rAF in sandboxed iframes, and it kept up with only
+  about 40% of scroll frames. The host sends `onViewport` at most once per frame, and the page draws when it
+  arrives (several requests in one task are merged with a microtask).
+- Highlights are loaded lazily in blocks of 1000 lines, only the blocks near the visible area; `onHighlights`
+  only marks blocks stale, the old colours stay until the new ones arrive.
+- For long files the frame is placed by the editor's scroll ratio; while dragging, the target line is estimated
+  from the current viewport by the average line height and corrected on each viewport update, so the frame stays
+  under the pointer even when code lenses and folding make line heights uneven.
+- Tabs count as 4 columns (the API doesn't expose the editor's tab width); full-width characters count as 1.
+
+## Contact
+
+Questions, bugs and suggestions: [GitHub Issues](https://github.com/wildcatDownstairs/openidea-minimap/issues).
+
+## License
+
+[MIT](LICENSE)

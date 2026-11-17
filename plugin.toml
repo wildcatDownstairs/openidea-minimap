@@ -1,10 +1,14 @@
 id = "wildcatdownstairs.minimap"
 name = "Minimap"
-version = "0.1.0"
-description = "A code minimap beside the editor: syntax colours, the visible area as a draggable frame, click to jump."
+version = "0.1.1"
+description = "A code minimap beside the editor: syntax colours, a draggable visible-area frame, click to jump. / 编辑器旁的代码缩略图：按语法配色，可拖动的可见区框，点击跳转。"
 authors = ["wildcatDownstairs"]
+homepage = "https://github.com/wildcatDownstairs/openidea-minimap"
 license = "MIT"
+change-notes = "0.1.1 — Plugin icon; English and Chinese description and README. / 插件图标；说明和 README 改为英文 + 中文。"
 categories = ["tools"]
+icon = "icons/minimap.svg"
+icon-dark = "icons/minimap_dark.svg"
 engines.openidea = "^1.9"
 
 [capabilities]
