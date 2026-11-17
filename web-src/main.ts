@@ -2,7 +2,7 @@
  * 代码缩略图：每行 4px、每个字符 2px 的色块（像 WebStorm），按语法高亮着色；可见区画成可拖动的框。
  * 只画面板里看得见的那几百行，所以上万行的文件每帧也只画这么多。
  */
-import { CHAR_W, LINE_H, layout, lineForFrameTop, type MapLayout } from "./layout.ts";
+import { CHAR_W, LINE_H, layout, lineForClick, lineForFrameTop, type MapLayout } from "./layout.ts";
 import { openidea, type EditorTarget, type EditorViewport, type HighlightSpan } from "./openidea.ts";
 
 const editor = openidea.editor!;
@@ -287,7 +287,7 @@ openidea.onThemeChange(redraw);
 new ResizeObserver(redraw).observe(canvas);
 window.addEventListener("resize", redraw); // 换到不同 DPR 的屏幕
 
-// 交互：点框外让框居中到那里，拖动框滚动编辑器，滚轮交给编辑器
+// 交互：点框外让点击处那一行居中，拖动框滚动编辑器，滚轮交给编辑器
 function steer() {
   const m = currentLayout();
   if (!drag || !m || !view) return;
@@ -305,9 +305,13 @@ function inFrame(y: number): boolean {
 
 canvas.addEventListener("pointerdown", (e) => {
   const m = currentLayout();
-  if (!m || e.button !== 0) return;
-  const grab = inFrame(e.offsetY) ? e.offsetY - m.frameTop : m.frameH / 2;
-  drag = { grab, y: e.offsetY, sent: -1 };
+  if (!m || !view || e.button !== 0) return;
+  if (!inFrame(e.offsetY)) {
+    // 点击只跳转，不开始拖动：跳过去后框不在指针下，接着拖会按滚动比例再跳一次
+    void editor.scrollTo(lineForClick(m, view, e.offsetY));
+    return;
+  }
+  drag = { grab: e.offsetY - m.frameTop, y: e.offsetY, sent: -1 };
   try {
     canvas.setPointerCapture(e.pointerId);
   } catch {

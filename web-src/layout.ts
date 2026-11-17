@@ -42,3 +42,13 @@ export function lineForFrameTop(m: MapLayout, v: EditorViewport, frameTop: numbe
   const target = clamp(frameTop / m.travel, 0, 1) * scrollable;
   return clamp(v.firstLine + (target - v.scrollTop) / (v.scrollHeight / lines), 0, lines);
 }
+
+/**
+ * 点击缩略图（框外）时编辑器应滚到的首行：点击处画的那一行居中。
+ * 长文件的缩略图卷动过，点击处的行要加上 offset 算，不能按滚动比例换算（那是拖框用的）。
+ */
+export function lineForClick(m: MapLayout, v: EditorViewport, y: number, lineH = LINE_H): number {
+  const lines = Math.max(1, v.lineCount);
+  const clicked = (m.offset + y) / lineH;
+  return clamp(clicked - (v.lastLine - v.firstLine) / 2, 0, lines);
+}

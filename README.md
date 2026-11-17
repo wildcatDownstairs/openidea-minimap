@@ -5,7 +5,7 @@ English · [简体中文](https://github.com/wildcatDownstairs/openidea-minimap/
 A code minimap for [OpenIDEA](https://github.com/l0ng-ai/openidea): the whole file in its syntax colours at the
 right edge of every editor (4px per line, 2px per character), the visible area as a frame you can drag.
 
-- Click the minimap: the visible area jumps there (the frame centres on the click)
+- Click the minimap: the editor jumps to the line you clicked, centred
 - Drag the frame: the editor scrolls with it; the wheel goes to the editor
 - When the file is longer than the panel, the minimap scrolls along with the editor (like VS Code / CodeGlance)
 - Follows the theme: dark themes use the syntax colours as they are; light themes follow WebStorm's minimap, with
