@@ -1,11 +1,11 @@
 id = "wildcatdownstairs.minimap"
 name = "Minimap"
-version = "0.1.2"
+version = "0.1.3"
 description = "A code minimap beside the editor: syntax colours, a draggable visible-area frame, click to jump. / 编辑器旁的代码缩略图：按语法配色，可拖动的可见区框，点击跳转。"
 authors = ["wildcatDownstairs"]
 homepage = "https://github.com/wildcatDownstairs/openidea-minimap"
 license = "MIT"
-change-notes = "0.1.2 — Section headers (MARK: / #region) as labels; the visible-area frame shows only while the pointer is over the minimap. / 分区标题（MARK: / #region）显示为小字标签；视口框只在鼠标移到缩略图上时显示。"
+change-notes = "0.1.3 — Fix: a section-header line containing a Unicode line separator (U+2028) could stall drawing; headers are now parsed in linear time. / 修复：含 Unicode 行分隔符（U+2028）的分区标题行可能卡住绘制；标题解析改为线性时间。"
 categories = ["tools"]
 icon = "icons/minimap.svg"
 icon-dark = "icons/minimap_dark.svg"
