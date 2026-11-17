@@ -2,8 +2,8 @@
  * 代码缩略图：每行 4px、每个字符 2px 的色块（像 WebStorm），按语法高亮着色；可见区画成可拖动的框。
  * 只画面板里看得见的那几百行，所以上万行的文件每帧也只画这么多。
  */
-import { CHAR_W, LINE_H, layout, lineForClick, lineForFrameTop, type MapLayout } from "./layout.ts";
-import { openidea, type EditorTarget, type EditorViewport, type HighlightSpan } from "./openidea.ts";
+import { CHAR_W, LINE_H, countsFromFolds, layout, lineForClick, lineForFrameTop, rows, type MapLayout, type Rows } from "./layout.ts";
+import { openidea, type EditorTarget, type EditorViewport, type Fold, type HighlightSpan, type Problem } from "./openidea.ts";
 import { sectionHeader, type SectionHeader } from "./sections.ts";
 
 const editor = openidea.editor!;
@@ -12,6 +12,11 @@ const ctx = canvas.getContext("2d")!;
 
 /** 一次向宿主要多少行的高亮（宿主上限 2000）。 */
 const BLOCK = 1000;
+/** 一次向宿主要多少行的换行信息（宿主上限 2000）。 */
+const WRAP_BLOCK = 2000;
+/** 问题标记的颜色和画的先后：错误最后画，压在上面。 */
+const PROBLEM_COLOR: Record<string, string> = { error: "--openidea-danger", warning: "--openidea-warning" };
+const PROBLEM_RANK: Record<string, number> = { error: 2, warning: 1 };
 /** 每行最多看多少个字符：面板最宽 400px。 */
 const SCAN = Math.ceil(400 / CHAR_W);
 // ponytail: 编辑器的 tab 宽度接口里拿不到，先按 4
@@ -34,6 +39,13 @@ let colors: (HighlightSpan[] | undefined)[] = [];
 let wanted: number[] = [];
 let loaded: number[] = [];
 let inflight = new Set<number>();
+// API 1.10，旧版 IDE 上一直是空的
+let problems: Problem[] = [];
+let folds: Fold[] = [];
+/** 开了自动换行时每行的视觉行数，否则 null。 */
+let wrapCounts: number[] | null = null;
+/** 编辑器行 ↔ 缩略图行。 */
+let rowMap: Rows = rows(1);
 
 /** 拖动中：指针按在框里的位置、指针当前位置、上次请求滚到的行。 */
 let drag: { grab: number; y: number; sent: number } | null = null;
@@ -118,7 +130,27 @@ function redraw() {
 }
 
 function currentLayout(): MapLayout | null {
-  return view ? layout(view, canvas.clientHeight) : null;
+  return view ? layout(view, canvas.clientHeight, rowMap) : null;
+}
+
+function updateRows() {
+  // 换行信息已经把折叠掉的行算成 0；行数对不上（刚编辑过）就先只按折叠算，等下一次 onLayout
+  const counts = wrapCounts?.length === lines.length ? wrapCounts : countsFromFolds(lines.length, folds);
+  rowMap = rows(lines.length, counts);
+}
+
+/** 画一段 [x0, x1) 列：自动换行的行按 `wc` 列一折，折到下面的视觉行（`wc` 为 0：不折）。 */
+function rectWrapped(path: Path2D, x0: number, x1: number, y: number, wc: number, lineH: number, charW: number, glyphH: number) {
+  if (!wc) {
+    path.rect(x0 * charW, y, (x1 - x0) * charW, glyphH);
+    return;
+  }
+  while (x0 < x1) {
+    const r = Math.floor(x0 / wc);
+    const end = Math.min(x1, (r + 1) * wc);
+    path.rect((x0 - r * wc) * charW, y + r * lineH, (end - x0) * charW, glyphH);
+    x0 = end;
+  }
 }
 
 function draw() {
@@ -140,21 +172,28 @@ function draw() {
   const glyphH = lineH - Math.max(1, Math.round(dpr)); // 行间留 1px 缝
   const charW = CHAR_W * dpr;
   const offset = Math.round(m.offset * dpr);
-  const first = Math.max(0, Math.floor(offset / lineH));
-  const last = Math.min(lines.length, Math.ceil((offset + h) / lineH));
+  const firstRow = Math.max(0, Math.floor(offset / lineH));
+  const first = Math.floor(rowMap.lineAt(firstRow));
+  const last = Math.min(lines.length, Math.floor(rowMap.lineAt(Math.ceil((offset + h) / lineH))) + 1);
   const maxX = Math.ceil(w / charW);
+  /** 第 i 行在面板里的 y（设备像素）。 */
+  const yOf = (i: number) => Math.round(rowMap.rowOf(i)) * lineH - offset;
 
   // 先把所有字画成淡色，再按颜色分组叠上高亮：每种颜色只 fill 一次
   const fg = themeVar("--openidea-fg", "#888");
   const groups = new Map<string, Path2D>();
   const base = new Path2D();
   for (let i = first; i < last; i++) {
-    const y = i * lineH - offset;
+    const n = rowMap.count(i);
+    if (!n) continue; // 被折叠的行
+    const y = yOf(i);
     const { runs, xs } = shapeOf(i);
     if (!runs.length) continue;
+    // 自动换行：编辑器的折行列数拿不到，按「行宽 / 视觉行数」均分（只是近似）
+    const wc = n > 1 ? Math.max(1, Math.ceil(runs[runs.length - 1]! / n)) : 0;
     for (let r = 0; r < runs.length; r += 2) {
-      if (runs[r]! >= maxX) break;
-      base.rect(runs[r]! * charW, y, (runs[r + 1]! - runs[r]!) * charW, glyphH);
+      if (!wc && runs[r]! >= maxX) break;
+      rectWrapped(base, runs[r]!, runs[r + 1]!, y, wc, lineH, charW, glyphH);
     }
     const spans = colors[i];
     if (!spans) continue;
@@ -162,7 +201,7 @@ function draw() {
     for (const s of spans) {
       const a = xs ? xs[Math.min(s.from, xs.length - 1)]! : s.from;
       const b = xs ? xs[Math.min(s.to, xs.length - 1)]! : s.to;
-      if (a >= maxX) break;
+      if (!wc && a >= maxX) break;
       // 只给片段里非空白的部分上色
       while (r < runs.length && runs[r + 1]! <= a) r += 2;
       let path = groups.get(s.color);
@@ -170,7 +209,7 @@ function draw() {
       for (let k = r; k < runs.length && runs[k]! < b; k += 2) {
         const x0 = Math.max(a, runs[k]!);
         const x1 = Math.min(b, runs[k + 1]!);
-        if (x1 > x0) path.rect(x0 * charW, y, (x1 - x0) * charW, glyphH);
+        if (x1 > x0) rectWrapped(path, x0, x1, y, wc, lineH, charW, glyphH);
       }
     }
   }
@@ -198,10 +237,12 @@ function draw() {
   ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
   ctx.textBaseline = "top";
   // 标题比一行高，上面几行的标题也会伸进来
-  for (let i = Math.max(0, first - Math.ceil(boxH / lineH)); i < last; i++) {
+  const headFirst = Math.floor(rowMap.lineAt(Math.max(0, firstRow - Math.ceil(boxH / lineH))));
+  for (let i = headFirst; i < last; i++) {
+    if (!rowMap.count(i)) continue;
     const hd = shapeOf(i).header;
     if (!hd) continue;
-    const y = i * lineH - offset;
+    const y = yOf(i);
     ctx.globalAlpha = 1;
     ctx.fillStyle = bg;
     ctx.fillRect(0, y, w, boxH);
@@ -214,6 +255,17 @@ function draw() {
       ctx.globalAlpha = 0.9;
       ctx.fillText(hd.label, 2 * px, y + px);
     }
+  }
+
+  // 问题标记（API 1.10）：右边缘一条竖线，至少两行高才看得见；问题已按严重程度排好，错误最后画
+  const barW = Math.max(2, Math.round(3 * dpr));
+  for (const p of problems) {
+    const top = yOf(p.line);
+    const bottom = Math.max(yOf(p.lastLine + 1), top + 2 * lineH);
+    if (bottom < 0 || top > h) continue;
+    ctx.globalAlpha = PROBLEM_COLOR[p.severity] ? 1 : 0.7;
+    ctx.fillStyle = themeVar(PROBLEM_COLOR[p.severity] ?? "--openidea-fg-muted", p.severity === "error" ? "#e55765" : "#c9a23a");
+    ctx.fillRect(w - barW, top, barW, bottom - top);
   }
 
   // 可见区：指针在缩略图上或拖动时才画，淡淡的底色加 1px 边框，悬停在框上和拖动时更明显
@@ -268,6 +320,42 @@ async function fetchBlock(b: number) {
 function setText(text: string) {
   lines = text.split("\n");
   shapes = [];
+  updateRows();
+}
+
+/** 问题按严重程度从轻到重排：画的时候错误最后画，压在上面。 */
+function setProblems(p: Problem[]) {
+  problems = [...p].sort((a, b) => (PROBLEM_RANK[a.severity] ?? 0) - (PROBLEM_RANK[b.severity] ?? 0));
+}
+
+let wrapFetching = false;
+let wrapAgain = false;
+/** 取全文件每行的视觉行数（API 1.10）；取的时候又有变化就再取一次。没开自动换行时为 null。 */
+async function fetchWrapped() {
+  if (!editor.wrapped) return;
+  if (wrapFetching) {
+    wrapAgain = true;
+    return;
+  }
+  wrapFetching = true;
+  const gen = generation;
+  try {
+    do {
+      wrapAgain = false;
+      const n = lines.length;
+      const parts: Promise<number[] | null>[] = [];
+      for (let from = 0; from < n; from += WRAP_BLOCK) parts.push(editor.wrapped(from, Math.min(n, from + WRAP_BLOCK)));
+      const got = await Promise.all(parts);
+      if (gen !== generation) return;
+      wrapCounts = got.some((g) => !g) ? null : (got as number[][]).flat();
+    } while (wrapAgain);
+    updateRows();
+    redraw();
+  } catch (err) {
+    console.warn("minimap: wrapped", err);
+  } finally {
+    wrapFetching = false;
+  }
 }
 
 async function retarget(t: EditorTarget | null) {
@@ -280,17 +368,29 @@ async function retarget(t: EditorTarget | null) {
   loaded = [];
   inflight = new Set();
   drag = null;
+  problems = [];
+  folds = [];
+  wrapCounts = null;
   if (!t) {
     setText("");
     redraw();
     return;
   }
   try {
-    const [doc, vp] = await Promise.all([editor.document.get(), editor.viewport()]);
+    const [doc, vp, p, f] = await Promise.all([
+      editor.document.get(),
+      editor.viewport(),
+      // 新接口出错不影响画代码
+      editor.problems?.().catch(() => []) ?? [],
+      editor.folded?.().catch(() => []) ?? [],
+    ]);
     if (gen !== generation) return;
     target = t;
+    setProblems(p);
+    folds = f;
     setText(doc.text);
     view = vp;
+    void fetchWrapped();
   } catch (err) {
     if (gen !== generation) return;
     console.warn("minimap: load", err);
@@ -303,6 +403,21 @@ editor.onTarget((t) => void retarget(t));
 editor.document.onChange((doc) => {
   if (!target) return;
   setText(doc.text);
+  if (wrapCounts) void fetchWrapped();
+  redraw();
+});
+// API 1.10：问题标记、折叠和自动换行
+editor.onProblems?.((p) => {
+  if (!target) return;
+  setProblems(p);
+  redraw();
+});
+editor.onLayout?.(({ folded, softWrap }) => {
+  if (!target) return;
+  folds = folded;
+  if (softWrap) void fetchWrapped();
+  else wrapCounts = null;
+  updateRows();
   redraw();
 });
 editor.onViewport((v) => {
@@ -324,7 +439,7 @@ window.addEventListener("resize", redraw); // 换到不同 DPR 的屏幕
 function steer() {
   const m = currentLayout();
   if (!drag || !m || !view) return;
-  const line = lineForFrameTop(m, view, drag.y - drag.grab);
+  const line = lineForFrameTop(m, view, drag.y - drag.grab, rowMap);
   // 已经在那儿了就不再发：编辑器不动就没有新的 viewport，校正自然停下
   if (Math.abs(line - drag.sent) < 0.01) return;
   drag.sent = line;
@@ -341,7 +456,7 @@ canvas.addEventListener("pointerdown", (e) => {
   if (!m || !view || e.button !== 0) return;
   if (!inFrame(e.offsetY)) {
     // 点击只跳转，不开始拖动：跳过去后框不在指针下，接着拖会按滚动比例再跳一次
-    void editor.scrollTo(lineForClick(m, view, e.offsetY));
+    void editor.scrollTo(lineForClick(m, view, e.offsetY, rowMap));
     return;
   }
   drag = { grab: e.offsetY - m.frameTop, y: e.offsetY, sent: -1 };

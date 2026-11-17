@@ -22,6 +22,19 @@ export interface HighlightSpan {
   color: string;
 }
 
+/** API 1.10：问题标记栏里的一个问题。 */
+export interface Problem {
+  line: number;
+  lastLine: number;
+  severity: string; // "error" | "warning" | "weakWarning"
+}
+
+/** API 1.10：一个折叠范围，`fromLine` 留着，`fromLine + 1` 到 `toLine` 被藏起来。 */
+export interface Fold {
+  fromLine: number;
+  toLine: number;
+}
+
 export interface Theme {
   dark: boolean;
   vars: Record<string, string>;
@@ -45,6 +58,13 @@ export interface OpenIdeaEditor {
   scrollBy(pixels: number): Promise<void>;
   highlights(fromLine: number, toLine: number): Promise<HighlightSpan[][]>;
   onHighlights(fn: (r: { fromLine: number; toLine: number }) => void): void;
+  // 以下是 API 1.10，旧版 IDE 没有：用之前先判断
+  problems?(): Promise<Problem[]>;
+  onProblems?(fn: (p: Problem[]) => void): void;
+  folded?(): Promise<Fold[]>;
+  /** 每行占几个视觉行（一次最多 2000 行）；没开自动换行时为 null。 */
+  wrapped?(fromLine: number, toLine: number): Promise<number[] | null>;
+  onLayout?(fn: (l: { folded: Fold[]; softWrap: boolean }) => void): void;
 }
 
 interface OpenIdea {

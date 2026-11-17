@@ -8,6 +8,9 @@ right edge of every editor (4px per line, 2px per character), the visible area a
 - Click the minimap: the editor jumps to the line you clicked, centred
 - Drag the frame: the editor scrolls with it; the wheel goes to the editor
 - The frame shows only while the pointer is over the minimap (like VS Code's default)
+- With OpenIDEA's plugin API 1.10 (the release after 0.1.46): errors and warnings as bars at the right edge, folded
+  code left out, wrapped lines drawn on as many rows as the editor shows, and semantic highlighting colours. Older
+  IDEs keep the rest.
 - Section headers: `// MARK: Title`, `// MARK: - Title` (with a separator line) and named `#region Title` comments are
   written out as small labels
 - When the file is longer than the panel, the minimap scrolls along with the editor (like VS Code / CodeGlance)

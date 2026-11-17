@@ -1,7 +1,7 @@
 // 运行：yarn test（Node 24 直接跑 TS）
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { LINE_H, layout, lineForClick, lineForFrameTop } from "./layout.ts";
+import { LINE_H, countsFromFolds, layout, lineForClick, lineForFrameTop, rows } from "./layout.ts";
 
 const view = (first: number, lineCount: number, visible = 40, pxPerLine = 20, pastEnd = 0) => {
   const clientHeight = visible * pxPerLine;
@@ -48,4 +48,38 @@ test("点击框外：点击处画的那一行居中，长文件的缩略图卷�
     const line = lineForClick(m, v, y);
     assert.ok(Math.abs(line + 20 - target) < 1, `${lines} 行：跳到 ${line}，期望 ${target - 20}`);
   }
+});
+
+test("折叠：被折叠的行不占缩略图行，换算来回一致", () => {
+  // 第 10 行折叠了 11–19 行
+  const map = rows(100, countsFromFolds(100, [{ fromLine: 10, toLine: 19 }]));
+  assert.equal(map.total, 91);
+  assert.equal(map.rowOf(10), 10);
+  assert.equal(map.rowOf(20), 11);
+  assert.equal(map.lineAt(11), 20);
+  assert.equal(map.lineAt(10.5), 10.5);
+  for (const l of [0, 5.25, 10, 20, 50.5, 99]) assert.ok(Math.abs(map.lineAt(map.rowOf(l)) - l) < 1e-9, `第 ${l} 行`);
+});
+
+test("自动换行：一行占好几个缩略图行", () => {
+  const counts = new Array(10).fill(1);
+  counts[3] = 4; // 第 3 行折成 4 行
+  const map = rows(10, counts);
+  assert.equal(map.total, 13);
+  assert.equal(map.rowOf(4), 7);
+  assert.equal(map.lineAt(5), 3.5);
+});
+
+test("有折叠时，视口框和点击都按缩略图行算", () => {
+  // 1000 行，开头 10–509 行折叠，编辑器停在第 600 行
+  const map = rows(1000, countsFromFolds(1000, [{ fromLine: 9, toLine: 509 }]));
+  const v = view(600, 1000);
+  const m = layout(v, 2400, map); // 499 行 × 4px 放得下：短文件
+  assert.equal(m.travel, 0);
+  assert.equal(m.frameTop, map.rowOf(600) * LINE_H);
+  // 框原地不动，换算回的还是第 600 行
+  assert.ok(Math.abs(lineForFrameTop(m, v, m.frameTop, map) - 600) < 1e-9);
+  // 点在第 700 行的色块上：700 行居中
+  const y = map.rowOf(700) * LINE_H + 1;
+  assert.ok(Math.abs(lineForClick(m, v, y, map) + 20 - 700) < 1);
 });
