@@ -383,15 +383,19 @@ async function fetchWrapped() {
     return;
   }
   wrapFetching = true;
-  const gen = generation;
   try {
     do {
       wrapAgain = false;
+      const gen = generation;
       const n = lines.length;
       const parts: Promise<number[] | null>[] = [];
       for (let from = 0; from < n; from += WRAP_BLOCK) parts.push(editor.wrapped(from, Math.min(n, from + WRAP_BLOCK)));
       const got = await Promise.all(parts);
-      if (gen !== generation) return;
+      // 取的时候切了文件：结果作废，按新文件再取一次
+      if (gen !== generation) {
+        wrapAgain = true;
+        continue;
+      }
       wrapCounts = got.some((g) => !g) ? null : (got as number[][]).flat();
     } while (wrapAgain);
     updateRows();
@@ -495,7 +499,10 @@ editor.onLayout?.(({ folded, softWrap }) => {
   if (!target) return;
   folds = folded;
   if (softWrap) void fetchWrapped();
-  else wrapCounts = null;
+  else {
+    wrapCounts = null;
+    wrapAgain = wrapFetching; // 正在取的是关闭之前的结果，再取一次才会得到 null
+  }
   updateRows();
   redraw();
 });
