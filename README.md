@@ -8,7 +8,7 @@ right edge of every editor (4px per line, 2px per character), the visible area a
 - Click the minimap: the editor jumps to the line you clicked, centred
 - Drag the frame: the editor scrolls with it; the wheel goes to the editor
 - The frame shows only while the pointer is over the minimap (like VS Code's default)
-- With OpenIDEA's plugin API 1.10 (the release after 0.1.46): errors and warnings as bars at the right edge, VCS
+- With OpenIDEA 0.1.48 or later: errors and warnings as bars at the right edge, VCS
   changes at the left edge in the gutter's colours, the selected lines and the caret's line tinted, folded code left
   out, wrapped lines drawn on as many rows as the editor shows, tabs as wide as in the editor, and semantic highlighting
   colours. Older IDEs keep the rest.
