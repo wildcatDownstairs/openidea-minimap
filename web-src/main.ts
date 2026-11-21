@@ -517,7 +517,17 @@ editor.onHighlights(({ fromLine, toLine }) => {
   for (let b = Math.floor(fromLine / BLOCK); b * BLOCK < toLine; b++) wanted[b] = (wanted[b] ?? 0) + 1;
   redraw();
 });
-openidea.onThemeChange(redraw);
+// WebView2（Chromium）里 iframe 和宿主的 color-scheme 不一致时会垫一层不透明白底，深色主题下缩略图就成了白色。
+// 旧版 IDE 只给根元素设 data-theme，不设 color-scheme，这里自己跟上。
+function followColorScheme() {
+  const theme = openidea.theme;
+  if (theme) document.documentElement.style.colorScheme = theme.dark ? "dark" : "light";
+}
+followColorScheme();
+openidea.onThemeChange(() => {
+  followColorScheme();
+  redraw();
+});
 new ResizeObserver(redraw).observe(canvas);
 window.addEventListener("resize", redraw); // 换到不同 DPR 的屏幕
 
